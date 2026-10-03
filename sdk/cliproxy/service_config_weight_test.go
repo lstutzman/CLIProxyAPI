@@ -21,6 +21,31 @@ func TestWeightedRoundRobinRoutingSelector(t *testing.T) {
 	}
 }
 
+func TestQuotaAwareRoutingSelector(t *testing.T) {
+	state := normalizedRoutingRuntimeState(&internalconfig.Config{
+		Routing: internalconfig.RoutingConfig{Strategy: "quota-aware"},
+	})
+	if state.strategy != "quota-aware" {
+		t.Fatalf("strategy = %q, want quota-aware", state.strategy)
+	}
+	if _, ok := newRoutingSelector(state).(*coreauth.QuotaAwareSelector); !ok {
+		t.Fatalf("selector type = %T, want *auth.QuotaAwareSelector", newRoutingSelector(state))
+	}
+	if state.quotaThreshold != coreauth.DefaultQuotaThreshold {
+		t.Fatalf("quotaThreshold = %v, want default %v", state.quotaThreshold, coreauth.DefaultQuotaThreshold)
+	}
+	custom := normalizedRoutingRuntimeState(&internalconfig.Config{
+		Routing: internalconfig.RoutingConfig{Strategy: "quota", QuotaThreshold: 80},
+	})
+	if selector, ok := newRoutingSelector(custom).(*coreauth.QuotaAwareSelector); !ok || selector.Threshold != 80 {
+		t.Fatalf("selector = %#v, want quota-aware with threshold 80", newRoutingSelector(custom))
+	}
+	state.sessionAffinity = true
+	if _, ok := newRoutingSelector(state).(*coreauth.SessionAffinitySelector); !ok {
+		t.Fatalf("selector type = %T, want *auth.SessionAffinitySelector", newRoutingSelector(state))
+	}
+}
+
 func TestServiceRejectsInvalidCredentialWeightConfigCommit(t *testing.T) {
 	originalCfg := &internalconfig.Config{}
 	service := &Service{cfg: originalCfg}

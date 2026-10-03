@@ -1,6 +1,9 @@
 package auth
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 const (
 	AuthKindAPIKey = "apikey"
@@ -139,4 +142,36 @@ func authMetadataString(auth *Auth, key string) string {
 	default:
 		return ""
 	}
+}
+
+// DefaultWebsockets reports the upstream websocket preference used when an auth
+// does not set "websockets" explicitly. Codex OAuth credentials default to the
+// websocket transport; API-key entries keep their explicit opt-in.
+func (a *Auth) DefaultWebsockets() bool {
+	if a == nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(a.Provider), "codex") && a.AuthKind() == AuthKindOAuth
+}
+
+// WebsocketsEnabled reports whether the auth uses the upstream websocket transport.
+// An explicit "websockets" attribute or metadata value wins; otherwise DefaultWebsockets applies.
+func (a *Auth) WebsocketsEnabled() bool {
+	if a == nil {
+		return false
+	}
+	if raw := strings.TrimSpace(a.Attributes["websockets"]); raw != "" {
+		if parsed, errParse := strconv.ParseBool(raw); errParse == nil {
+			return parsed
+		}
+	}
+	switch v := a.Metadata["websockets"].(type) {
+	case bool:
+		return v
+	case string:
+		if parsed, errParse := strconv.ParseBool(strings.TrimSpace(v)); errParse == nil {
+			return parsed
+		}
+	}
+	return a.DefaultWebsockets()
 }

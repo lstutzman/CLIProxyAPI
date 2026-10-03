@@ -411,35 +411,7 @@ func canonicalModelKey(model string) string {
 }
 
 func authWebsocketsEnabled(auth *Auth) bool {
-	if auth == nil {
-		return false
-	}
-	if len(auth.Attributes) > 0 {
-		if raw := strings.TrimSpace(auth.Attributes["websockets"]); raw != "" {
-			parsed, errParse := strconv.ParseBool(raw)
-			if errParse == nil {
-				return parsed
-			}
-		}
-	}
-	if len(auth.Metadata) == 0 {
-		return false
-	}
-	raw, ok := auth.Metadata["websockets"]
-	if !ok || raw == nil {
-		return false
-	}
-	switch v := raw.(type) {
-	case bool:
-		return v
-	case string:
-		parsed, errParse := strconv.ParseBool(strings.TrimSpace(v))
-		if errParse == nil {
-			return parsed
-		}
-	default:
-	}
-	return false
+	return auth.WebsocketsEnabled()
 }
 
 func preferCodexWebsocketAuths(ctx context.Context, provider string, available []*Auth) []*Auth {
@@ -1033,6 +1005,7 @@ func (s *SessionAffinitySelector) Pick(ctx context.Context, provider, model stri
 	if err != nil {
 		return nil, err
 	}
+	available = s.filterAffinityCandidates(available)
 	fallbackAuths := highestPriorityAuths(available)
 
 	modelKey := canonicalModelKey(model)
@@ -1111,6 +1084,21 @@ func (s *SessionAffinitySelector) Pick(ctx context.Context, provider, model stri
 	return auth, nil
 }
 
+// affinityCandidateFilter is implemented by fallback selectors that can release a session
+// binding before its credential becomes unavailable.
+type affinityCandidateFilter interface {
+	filterAffinityCandidates(auths []*Auth) []*Auth
+}
+
+// filterAffinityCandidates lets the fallback selector narrow the credentials a session may
+// stay bound to; a binding outside the result is reselected through the fallback.
+func (s *SessionAffinitySelector) filterAffinityCandidates(available []*Auth) []*Auth {
+	if filter, ok := s.fallback.(affinityCandidateFilter); ok {
+		return filter.filterAffinityCandidates(available)
+	}
+	return available
+}
+
 func (s *SessionAffinitySelector) pickLCP(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, auths []*Auth, entry *log.Entry) (*Auth, bool, error) {
 	if s == nil || s.matcher == nil {
 		return nil, false, nil
@@ -1142,6 +1130,7 @@ func (s *SessionAffinitySelector) pickLCP(ctx context.Context, provider, model s
 	if errAvailable != nil {
 		return nil, true, errAvailable
 	}
+	available = s.filterAffinityCandidates(available)
 
 	if match, ok := s.matcher.MatchFingerprintsWithContext(namespace, fingerprints, tailFingerprints, envDigest, minPrefixLength); ok {
 		for _, auth := range available {

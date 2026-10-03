@@ -614,9 +614,20 @@ func authWebsocketsValue(auth *coreauth.Auth) (bool, bool) {
 		}
 	}
 	if auth.Metadata == nil {
-		return false, false
+		return authDefaultWebsocketsValue(auth)
 	}
-	return parseWebsocketsValue(auth.Metadata["websockets"])
+	if websockets, ok := parseWebsocketsValue(auth.Metadata["websockets"]); ok {
+		return websockets, true
+	}
+	return authDefaultWebsocketsValue(auth)
+}
+
+// authDefaultWebsocketsValue reports the implicit websocket default so listings match the executor.
+func authDefaultWebsocketsValue(auth *coreauth.Auth) (bool, bool) {
+	if auth.DefaultWebsockets() {
+		return true, true
+	}
+	return false, false
 }
 
 func parsePriorityValue(raw any) (int, bool) {

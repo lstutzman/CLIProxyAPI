@@ -867,11 +867,11 @@ func authWebsocketsValue(auth *coreauth.Auth) (bool, bool) {
 		}
 	}
 	if auth.Metadata == nil {
-		return false, false
+		return authDefaultWebsocketsValue(auth)
 	}
 	raw, ok := auth.Metadata["websockets"]
 	if !ok || raw == nil {
-		return false, false
+		return authDefaultWebsocketsValue(auth)
 	}
 	switch v := raw.(type) {
 	case bool:
@@ -881,6 +881,14 @@ func authWebsocketsValue(auth *coreauth.Auth) (bool, bool) {
 		if errParse == nil {
 			return parsed, true
 		}
+	}
+	return false, false
+}
+
+// authDefaultWebsocketsValue reports the implicit websocket default so listings match the executor.
+func authDefaultWebsocketsValue(auth *coreauth.Auth) (bool, bool) {
+	if auth.DefaultWebsockets() {
+		return true, true
 	}
 	return false, false
 }
