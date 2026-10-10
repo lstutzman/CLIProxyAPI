@@ -28,7 +28,22 @@ type QuotaAwareSelector struct {
 	// Threshold is the used percentage (0-100] at which a credential is skipped.
 	// Non-positive or out-of-range values use DefaultQuotaThreshold.
 	Threshold float64
-	nowFunc   func() time.Time
+	// AccountThresholds overrides Threshold per account email (lower-case keys). A listed
+	// account is a reserve: it is never picked at or above its own threshold.
+	AccountThresholds map[string]float64
+	nowFunc           func() time.Time
+}
+
+// thresholdFor returns the credential's own threshold and whether it is a reserve.
+func (s *QuotaAwareSelector) thresholdFor(auth *Auth) (float64, bool) {
+	if s != nil && len(s.AccountThresholds) > 0 {
+		if _, email := auth.AccountInfo(); email != "" {
+			if t, ok := s.AccountThresholds[strings.ToLower(strings.TrimSpace(email))]; ok {
+				return t, true
+			}
+		}
+	}
+	return s.threshold(), false
 }
 
 func (s *QuotaAwareSelector) now() time.Time {
@@ -56,11 +71,14 @@ func (s *QuotaAwareSelector) Pick(ctx context.Context, provider, model string, o
 	}
 	available = preferCodexWebsocketAuths(ctx, provider, available)
 
-	threshold := s.threshold()
 	var under, over *Auth
 	underUsed, overUsed := -1.0, math.Inf(1)
 	for _, candidate := range available {
 		used := QuotaUsedPercent(candidate, now)
+		threshold, reserve := s.thresholdFor(candidate)
+		if used >= threshold && reserve {
+			continue
+		}
 		if used < threshold {
 			if used > underUsed {
 				under, underUsed = candidate, used
@@ -72,6 +90,9 @@ func (s *QuotaAwareSelector) Pick(ctx context.Context, provider, model string, o
 	if under != nil {
 		return under, nil
 	}
+	if over == nil {
+		return nil, &Error{Code: "auth_not_found", Message: "every available credential is spent or held in reserve"}
+	}
 	return over, nil
 }
 
@@ -80,9 +101,9 @@ func (s *QuotaAwareSelector) Pick(ctx context.Context, provider, model string, o
 // unchanged when no credential is below the threshold.
 func (s *QuotaAwareSelector) filterAffinityCandidates(auths []*Auth) []*Auth {
 	now := s.now()
-	threshold := s.threshold()
 	under := make([]*Auth, 0, len(auths))
 	for _, auth := range auths {
+		threshold, _ := s.thresholdFor(auth)
 		if QuotaUsedPercent(auth, now) < threshold {
 			under = append(under, auth)
 		}
