@@ -30,6 +30,7 @@ type routingRuntimeState struct {
 	sessionAffinityTTL       time.Duration
 	sessionAffinitySubagents bool
 	quotaThreshold           float64
+	quotaThresholds          map[string]float64
 }
 
 func normalizedRoutingRuntimeState(cfg *config.Config) routingRuntimeState {
@@ -55,6 +56,16 @@ func normalizedRoutingRuntimeState(cfg *config.Config) routingRuntimeState {
 		if threshold := cfg.Routing.QuotaThreshold; threshold > 0 && threshold <= 100 {
 			state.quotaThreshold = threshold
 		}
+		for account, threshold := range cfg.Routing.QuotaThresholds {
+			key := strings.ToLower(strings.TrimSpace(account))
+			if key == "" || threshold <= 0 || threshold > 100 {
+				continue
+			}
+			if state.quotaThresholds == nil {
+				state.quotaThresholds = make(map[string]float64)
+			}
+			state.quotaThresholds[key] = threshold
+		}
 	}
 	state.sessionAffinity = cfg.Routing.SessionAffinity
 	if ttl := strings.TrimSpace(cfg.Routing.SessionAffinityTTL); ttl != "" {
@@ -79,7 +90,7 @@ func newRoutingSelector(state routingRuntimeState) coreauth.Selector {
 	case "fill-first":
 		selector = &coreauth.FillFirstSelector{}
 	case "quota-aware":
-		selector = &coreauth.QuotaAwareSelector{Threshold: state.quotaThreshold}
+		selector = &coreauth.QuotaAwareSelector{Threshold: state.quotaThreshold, AccountThresholds: state.quotaThresholds}
 	default:
 		selector = &coreauth.RoundRobinSelector{}
 	}

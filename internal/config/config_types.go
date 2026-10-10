@@ -376,6 +376,11 @@ type RoutingConfig struct {
 	// moves work off a credential, including credentials already bound by session affinity.
 	// Default: 90.
 	QuotaThreshold float64 `yaml:"quota-threshold,omitempty" json:"quota-threshold,omitempty"`
+
+	// QuotaThresholds overrides QuotaThreshold per account, keyed by the OAuth account email
+	// (case-insensitive). An account listed here is a reserve: the "quota-aware" strategy never
+	// sends it work at or above its own threshold, not even when every other account is spent.
+	QuotaThresholds map[string]float64 `yaml:"quota-thresholds,omitempty" json:"quota-thresholds,omitempty"`
 }
 
 // OAuthModelAlias defines a model ID alias for a specific channel.
