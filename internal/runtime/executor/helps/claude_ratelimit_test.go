@@ -324,6 +324,24 @@ func TestClaudeHeadersIndicateUnifiedRateLimitRejection_OverageRejection_Issue59
 	}
 }
 
+// Upstream issue #7197: with no 5h headers at all, a Fable-only 7d_oi rejection must stay model scoped.
+func TestFableOnlyRejectionWithoutFiveHourHeadersIsNotUnified_Issue7197(t *testing.T) {
+	headers := http.Header{
+		"Anthropic-Ratelimit-Unified-Status":                  []string{"rejected"},
+		"Anthropic-Ratelimit-Unified-Representative-Claim":    []string{"seven_day_overage_included"},
+		"Anthropic-Ratelimit-Unified-7d-Status":               []string{"allowed"},
+		"Anthropic-Ratelimit-Unified-7d-Utilization":          []string{"0.62"},
+		"Anthropic-Ratelimit-Unified-7d_oi-Status":            []string{"rejected"},
+		"Anthropic-Ratelimit-Unified-7d_oi-Utilization":       []string{"1.0"},
+		"Anthropic-Ratelimit-Unified-Overage-Status":          []string{"rejected"},
+		"Anthropic-Ratelimit-Unified-Overage-Disabled-Reason": []string{"out_of_credits"},
+		"Retry-After": []string{"546534"},
+	}
+	if ClaudeHeadersIndicateUnifiedRateLimitRejection(headers) {
+		t.Fatal("Fable-only rejection with no 5h headers must not be a credential-wide rejection")
+	}
+}
+
 func TestClaudeHeadersIndicateUnifiedRateLimitRejection_OverageRejection_UtilizationBoundaries(t *testing.T) {
 	baseHeaders := func() http.Header {
 		return http.Header{
@@ -344,7 +362,7 @@ func TestClaudeHeadersIndicateUnifiedRateLimitRejection_OverageRejection_Utiliza
 	}{
 		{name: "healthy zero utilization", utilization: "0.00", wantUnified: false},
 		{name: "healthy partial utilization", utilization: "0.50", wantUnified: false},
-		{name: "missing utilization", utilization: "", wantUnified: true},
+		{name: "missing 5h window with healthy 7d utilization", utilization: "", wantUnified: false},
 		{name: "invalid text", utilization: "invalid", wantUnified: true},
 		{name: "NaN", utilization: "NaN", wantUnified: true},
 		{name: "+Inf", utilization: "+Inf", wantUnified: true},

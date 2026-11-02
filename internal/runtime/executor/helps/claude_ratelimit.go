@@ -80,7 +80,11 @@ func isOverageOrFableOnlyRejection(headers http.Header, unifiedStatus, status5h,
 	// Require an explicit, valid non-negative utilization below 1.0 before
 	// treating the unmentioned window as healthy.
 	if shared7dAllowed && status5h == "" {
-		if isClaudeUtilizationHealthy(getHeaderCaseInsensitive(headers, "Anthropic-Ratelimit-Unified-5h-Utilization")) {
+		util5h := strings.TrimSpace(getHeaderCaseInsensitive(headers, "Anthropic-Ratelimit-Unified-5h-Utilization"))
+		// Anthropic now omits the 5h window entirely, so for a Fable-only (7d_oi) rejection an
+		// absent 5h window is healthy when the 7d window is allowed with healthy utilization.
+		if isClaudeUtilizationHealthy(util5h) ||
+			(util5h == "" && status7dOI == "rejected" && isClaudeUtilizationHealthy(getHeaderCaseInsensitive(headers, "Anthropic-Ratelimit-Unified-7d-Utilization"))) {
 			return true
 		}
 	}
