@@ -11,8 +11,8 @@ import (
 
 func reserveTestAuth(id, email string, used float64, reset time.Time) *Auth {
 	signals := map[string]string{
-		"anthropic-ratelimit-unified-5h-utilization": strconv.FormatFloat(used/100, 'f', 4, 64),
-		"anthropic-ratelimit-unified-5h-reset":       unixString(reset),
+		"anthropic-ratelimit-unified-7d-utilization": strconv.FormatFloat(used/100, 'f', 4, 64),
+		"anthropic-ratelimit-unified-7d-reset":       unixString(reset),
 	}
 	a := quotaTestAuth(id, "claude", signals, reset.Add(-time.Hour))
 	a.Metadata["email"] = email

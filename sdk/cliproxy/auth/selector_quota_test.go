@@ -35,20 +35,23 @@ func TestQuotaUsedPercentClaude(t *testing.T) {
 		want    float64
 	}{
 		{name: "no observation", signals: nil, want: 0},
-		{name: "max of windows", signals: map[string]string{
-			"Anthropic-Ratelimit-Unified-5h-Utilization": "0.25",
-			"Anthropic-Ratelimit-Unified-5h-Reset":       unixString(future),
+		{name: "7d window only", signals: map[string]string{
 			"Anthropic-Ratelimit-Unified-7d-Utilization": "0.6",
 			"Anthropic-Ratelimit-Unified-7d-Reset":       unixString(future),
 		}, want: 60},
-		{name: "reset window ignored", signals: map[string]string{
+		{name: "legacy 5h window ignored", signals: map[string]string{
 			"Anthropic-Ratelimit-Unified-5h-Utilization": "0.99",
-			"Anthropic-Ratelimit-Unified-5h-Reset":       unixString(past),
-			"Anthropic-Ratelimit-Unified-7d-Utilization": "0.1",
-		}, want: 10},
-		{name: "rejected window is full", signals: map[string]string{
-			"Anthropic-Ratelimit-Unified-5h-Status":      "rejected",
 			"Anthropic-Ratelimit-Unified-5h-Reset":       unixString(future),
+			"Anthropic-Ratelimit-Unified-7d-Utilization": "0.1",
+			"Anthropic-Ratelimit-Unified-7d-Reset":       unixString(future),
+		}, want: 10},
+		{name: "reset window ignored", signals: map[string]string{
+			"Anthropic-Ratelimit-Unified-7d-Utilization": "0.99",
+			"Anthropic-Ratelimit-Unified-7d-Reset":       unixString(past),
+		}, want: 0},
+		{name: "rejected window is full", signals: map[string]string{
+			"Anthropic-Ratelimit-Unified-7d-Status":      "rejected",
+			"Anthropic-Ratelimit-Unified-7d-Reset":       unixString(future),
 			"Anthropic-Ratelimit-Unified-7d-Utilization": "0.1",
 		}, want: 100},
 	}
@@ -132,8 +135,8 @@ func TestQuotaAwareSelectorFiveHourWindowTriggersSwitch(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0)
 	selector := &QuotaAwareSelector{nowFunc: func() time.Time { return now }}
 	a := claudeWeeklyAuth("a", "0.4", now)
-	a.Quota.Signals["Anthropic-Ratelimit-Unified-5h-Utilization"] = "0.91"
-	a.Quota.Signals["Anthropic-Ratelimit-Unified-5h-Reset"] = unixString(now.Add(time.Hour))
+	a.Quota.Signals["Anthropic-Ratelimit-Unified-7d-Utilization"] = "0.91"
+	a.Quota.Signals["Anthropic-Ratelimit-Unified-7d-Reset"] = unixString(now.Add(time.Hour))
 	b := claudeWeeklyAuth("b", "0.2", now)
 
 	picked, err := selector.Pick(context.Background(), "claude", "", cliproxyexecutor.Options{}, []*Auth{a, b})
@@ -141,7 +144,7 @@ func TestQuotaAwareSelectorFiveHourWindowTriggersSwitch(t *testing.T) {
 		t.Fatalf("Pick() error = %v", err)
 	}
 	if picked.ID != "b" {
-		t.Fatalf("Pick() = %s, want b once a's 5h window passes the default threshold", picked.ID)
+		t.Fatalf("Pick() = %s, want b once a's 7d window passes the default threshold", picked.ID)
 	}
 }
 
