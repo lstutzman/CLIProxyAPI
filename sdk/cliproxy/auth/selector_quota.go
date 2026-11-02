@@ -22,7 +22,7 @@ const DefaultQuotaThreshold = 90.0
 // Threshold it picks the least-used one.
 //
 // Usage comes from the passive rate-limit snapshot recorded on every upstream response
-// (Claude unified 5h/7d windows, Codex primary/secondary windows), so it costs no extra
+// (Claude unified 7d window, Codex primary/secondary windows), so it costs no extra
 // upstream requests. Credentials without a snapshot count as unused.
 type QuotaAwareSelector struct {
 	// Threshold is the used percentage (0-100] at which a credential is skipped.
@@ -125,7 +125,8 @@ func QuotaUsedPercent(auth *Auth, now time.Time) float64 {
 	used := 0.0
 	switch strings.ToLower(strings.TrimSpace(auth.Provider)) {
 	case "claude":
-		for _, window := range []string{"5h", "7d"} {
+		// Anthropic removed the 5h window; only the 7d window is read.
+		for _, window := range []string{"7d"} {
 			prefix := "anthropic-ratelimit-unified-" + window + "-"
 			reset, hasReset := quotaSignalUnix(signals, prefix+"reset")
 			if hasReset && !reset.After(now) {

@@ -161,7 +161,7 @@ access:
 # Routing strategy for selecting credentials when multiple match.
 routing:
   strategy: "round-robin" # round-robin (default), weighted-round-robin, fill-first, quota-aware
-  # quota-aware keeps all work on one credential until any of its subscription windows (Claude 5h/7d,
+  # quota-aware keeps all work on one credential until any of its subscription windows (Claude 7d,
   # Codex primary/secondary, read from earlier responses' rate-limit headers) reaches quota-threshold,
   # then moves to the most-used credential still below it, so partly used accounts drain before fresh
   # ones. Credentials not yet observed count as unused. With session-affinity, bound sessions also move
