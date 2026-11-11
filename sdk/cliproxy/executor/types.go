@@ -42,6 +42,13 @@ const (
 	PinnedAuthMetadataKey = "pinned_auth_id"
 	// ExcludedAuthIDsMetadataKey excludes specific auth IDs from selection for the current attempt.
 	ExcludedAuthIDsMetadataKey = "excluded_auth_ids"
+	// RequestedAccountMetadataKey carries the account a client named for this request (the raw
+	// X-CPA-Account value). The auth manager resolves it to one auth and pins the request to it.
+	RequestedAccountMetadataKey = "requested_account"
+	// ExplicitAccountMetadataKey marks a request pinned by a client-named account. Such a request
+	// bypasses routing strategy, quota reserve and session affinity: it never reads or rewrites a
+	// session binding and never falls back to another account.
+	ExplicitAccountMetadataKey = "explicit_account"
 	// SelectionIDMetadataKey stores the per-selection ID generated for a plugin scheduler pick.
 	SelectionIDMetadataKey = "selection_id"
 	// SelectedAuthMetadataKey stores the auth ID selected by the scheduler.
