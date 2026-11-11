@@ -126,3 +126,13 @@ func firstAuth(auths []*Auth) *Auth {
 	}
 	return auths[0]
 }
+
+// unresolvedAccountError fails closed when a request still carries a client-named account that
+// applyRequestedAccount did not resolve (for example a selection entry point that skips it), so a
+// named request can never be routed by the strategy instead.
+func unresolvedAccountError(opts cliproxyexecutor.Options) error {
+	if requestedAccountFromMetadata(opts.Metadata) == "" || explicitAccountFromMetadata(opts.Metadata) {
+		return nil
+	}
+	return &Error{Code: ErrorCodeAccountUnsupported, Message: "naming an account is not supported on this selection path", HTTPStatus: http.StatusNotImplemented}
+}
