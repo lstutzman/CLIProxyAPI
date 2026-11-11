@@ -1969,7 +1969,16 @@ func (m *Manager) pickNextLegacy(ctx context.Context, provider, model string, op
 	transientAuthIDs := m.transientlyUnavailableSessionAffinityAuthIDs(selector, affinityCandidates, model, now)
 	m.mu.RUnlock()
 
-	selected, handled, errPick := m.pickViaPluginScheduler(ctx, pluginScheduler, provider, []string{provider}, model, opts, tried, available)
+	var selected *Auth
+	var handled bool
+	var errPick error
+	if explicitAccountFromMetadata(opts.Metadata) {
+		// A client-named account bypasses the plugin scheduler and the selector, so routing
+		// strategy, quota reserve and session affinity can neither veto nor rebind it.
+		selected, handled = firstAuth(selectorAuths), true
+	} else {
+		selected, handled, errPick = m.pickViaPluginScheduler(ctx, pluginScheduler, provider, []string{provider}, model, opts, tried, available)
+	}
 	if errPick != nil {
 		m.warnLogAuthUnavailable(ctx, []string{provider}, model, opts, tried, errPick)
 		return nil, nil, errPick
@@ -2318,7 +2327,15 @@ func (m *Manager) pickNextMixedLegacy(ctx context.Context, providers []string, m
 	transientAuthIDs := m.transientlyUnavailableSessionAffinityAuthIDs(selector, affinityCandidates, model, now)
 	m.mu.RUnlock()
 
-	selected, handled, errPick := m.pickViaPluginScheduler(ctx, pluginScheduler, "mixed", providers, model, opts, tried, available)
+	var selected *Auth
+	var handled bool
+	var errPick error
+	if explicitAccountFromMetadata(opts.Metadata) {
+		// See pickNextLegacy: a client-named account bypasses scheduler, selector and affinity.
+		selected, handled = firstAuth(selectorAuths), true
+	} else {
+		selected, handled, errPick = m.pickViaPluginScheduler(ctx, pluginScheduler, "mixed", providers, model, opts, tried, available)
+	}
 	if errPick != nil {
 		m.warnLogAuthUnavailable(ctx, providers, model, opts, tried, errPick)
 		return nil, nil, "", errPick
