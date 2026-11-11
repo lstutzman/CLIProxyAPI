@@ -249,16 +249,23 @@ func executionPassthroughHeaders(cfg *config.SDKConfig, internal bool) bool {
 	return internal || PassthroughHeadersEnabled(cfg)
 }
 
+// RequestedAccountHeader names the request header that selects the credential serving a request.
+// Its value is the account's label, email or auth file name. Only API-key-authenticated callers
+// may send it; the access middleware refuses it otherwise.
+const RequestedAccountHeader = "X-CPA-Account"
+
 func requestExecutionMetadata(ctx context.Context) map[string]any {
 	// Idempotency-Key is an optional client-supplied header used to correlate retries.
 	// Only include it if the client explicitly provides it.
 	key := ""
 	requestPath := ""
+	requestedAccount := ""
 	var ginCtx *gin.Context
 	if ctx != nil {
 		if requestGinCtx, ok := ctx.Value("gin").(*gin.Context); ok && requestGinCtx != nil && requestGinCtx.Request != nil {
 			ginCtx = requestGinCtx
 			key = strings.TrimSpace(ginCtx.GetHeader("Idempotency-Key"))
+			requestedAccount = strings.TrimSpace(ginCtx.GetHeader(RequestedAccountHeader))
 			requestPath = strings.TrimSpace(ginCtx.FullPath())
 			if requestPath == "" && ginCtx.Request.URL != nil {
 				requestPath = strings.TrimSpace(ginCtx.Request.URL.Path)
@@ -272,6 +279,10 @@ func requestExecutionMetadata(ctx context.Context) map[string]any {
 	}
 	if requestPath != "" {
 		meta[coreexecutor.RequestPathMetadataKey] = requestPath
+	}
+	if requestedAccount != "" {
+		// The API-key guard in the access middleware has already refused unauthenticated callers.
+		meta[coreexecutor.RequestedAccountMetadataKey] = requestedAccount
 	}
 	if pinnedAuthID := pinnedAuthIDFromContext(ctx); pinnedAuthID != "" {
 		meta[coreexecutor.PinnedAuthMetadataKey] = pinnedAuthID

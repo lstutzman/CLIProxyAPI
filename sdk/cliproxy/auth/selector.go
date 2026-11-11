@@ -1650,6 +1650,10 @@ func (s *SessionAffinitySelector) OnResult(res Result) {
 	if s == nil || res.AuthID == "" {
 		return
 	}
+	if explicitAccountFromMetadata(res.Options.Metadata) {
+		// A client-named account never touches, extends or drops a session binding.
+		return
+	}
 
 	explicitID, explicitFallbackID := extractExplicitSessionIDs(res.Options.Headers, res.Options.OriginalRequest, res.Options.Metadata)
 	if explicitID != "" {

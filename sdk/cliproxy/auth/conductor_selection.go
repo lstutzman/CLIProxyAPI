@@ -1895,6 +1895,9 @@ func (m *Manager) routeAwareSelectionRequired(auth *Auth, routeModel string) boo
 }
 
 func (m *Manager) pickNextLegacy(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, tried map[string]struct{}) (*Auth, ProviderExecutor, error) {
+	if errAccount := unresolvedAccountError(opts); errAccount != nil {
+		return nil, nil, errAccount
+	}
 	if m.HomeEnabled() {
 		clearSchedulerSelectionID(opts.Metadata)
 		auth, exec, _, err := m.pickNextViaHome(ctx, model, opts, tried)
@@ -1969,7 +1972,16 @@ func (m *Manager) pickNextLegacy(ctx context.Context, provider, model string, op
 	transientAuthIDs := m.transientlyUnavailableSessionAffinityAuthIDs(selector, affinityCandidates, model, now)
 	m.mu.RUnlock()
 
-	selected, handled, errPick := m.pickViaPluginScheduler(ctx, pluginScheduler, provider, []string{provider}, model, opts, tried, available)
+	var selected *Auth
+	var handled bool
+	var errPick error
+	if explicitAccountFromMetadata(opts.Metadata) {
+		// A client-named account bypasses the plugin scheduler and the selector, so routing
+		// strategy, quota reserve and session affinity can neither veto nor rebind it.
+		selected, handled = firstAuth(selectorAuths), true
+	} else {
+		selected, handled, errPick = m.pickViaPluginScheduler(ctx, pluginScheduler, provider, []string{provider}, model, opts, tried, available)
+	}
 	if errPick != nil {
 		m.warnLogAuthUnavailable(ctx, []string{provider}, model, opts, tried, errPick)
 		return nil, nil, errPick
@@ -2167,6 +2179,9 @@ func (m *Manager) SelectHomeAuthByKind(ctx context.Context, provider string, mod
 }
 
 func (m *Manager) pickNext(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, tried map[string]struct{}) (*Auth, ProviderExecutor, error) {
+	if errAccount := unresolvedAccountError(opts); errAccount != nil {
+		return nil, nil, errAccount
+	}
 	opts.EnsureMetadata()
 	clearSchedulerSelectionID(opts.Metadata)
 	if m.HomeEnabled() {
@@ -2229,6 +2244,9 @@ func (m *Manager) pickNext(ctx context.Context, provider, model string, opts cli
 }
 
 func (m *Manager) pickNextMixedLegacy(ctx context.Context, providers []string, model string, opts cliproxyexecutor.Options, tried map[string]struct{}) (*Auth, ProviderExecutor, string, error) {
+	if errAccount := unresolvedAccountError(opts); errAccount != nil {
+		return nil, nil, "", errAccount
+	}
 	if m.HomeEnabled() {
 		clearSchedulerSelectionID(opts.Metadata)
 		return m.pickNextViaHome(ctx, model, opts, tried)
@@ -2318,7 +2336,15 @@ func (m *Manager) pickNextMixedLegacy(ctx context.Context, providers []string, m
 	transientAuthIDs := m.transientlyUnavailableSessionAffinityAuthIDs(selector, affinityCandidates, model, now)
 	m.mu.RUnlock()
 
-	selected, handled, errPick := m.pickViaPluginScheduler(ctx, pluginScheduler, "mixed", providers, model, opts, tried, available)
+	var selected *Auth
+	var handled bool
+	var errPick error
+	if explicitAccountFromMetadata(opts.Metadata) {
+		// See pickNextLegacy: a client-named account bypasses scheduler, selector and affinity.
+		selected, handled = firstAuth(selectorAuths), true
+	} else {
+		selected, handled, errPick = m.pickViaPluginScheduler(ctx, pluginScheduler, "mixed", providers, model, opts, tried, available)
+	}
 	if errPick != nil {
 		m.warnLogAuthUnavailable(ctx, providers, model, opts, tried, errPick)
 		return nil, nil, "", errPick
@@ -2356,6 +2382,9 @@ func (m *Manager) pickNextMixedLegacy(ctx context.Context, providers []string, m
 }
 
 func (m *Manager) pickNextMixed(ctx context.Context, providers []string, model string, opts cliproxyexecutor.Options, tried map[string]struct{}) (*Auth, ProviderExecutor, string, error) {
+	if errAccount := unresolvedAccountError(opts); errAccount != nil {
+		return nil, nil, "", errAccount
+	}
 	opts.EnsureMetadata()
 	clearSchedulerSelectionID(opts.Metadata)
 	if m.HomeEnabled() {

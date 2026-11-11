@@ -499,9 +499,33 @@ func closeUnconsumedRequestOnAbort(c *gin.Context) {
 	}
 }
 
+// refuseAccountSelector aborts a request that names an account (X-CPA-Account) without having
+// authenticated with a proxy API key, so open or credential-less access can never pick an account.
+func refuseAccountSelector(c *gin.Context, realtimeError bool) bool {
+	if c == nil || c.Request == nil || strings.TrimSpace(c.GetHeader(handlers.RequestedAccountHeader)) == "" {
+		return false
+	}
+	closeUnconsumedRequestOnAbort(c)
+	const message = "the " + handlers.RequestedAccountHeader + " header requires an API key"
+	if realtimeError {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": gin.H{
+			"message": message,
+			"type":    "authentication_error",
+			"param":   nil,
+			"code":    "account_selector_requires_api_key",
+		}})
+		return true
+	}
+	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": message})
+	return true
+}
+
 func accessAuthMiddleware(manager *sdkaccess.Manager, realtimeError bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if manager == nil {
+			if refuseAccountSelector(c, realtimeError) {
+				return
+			}
 			middleware.CaptureAuthenticatedRequestBody(c)
 			if c.IsAborted() {
 				return
@@ -512,6 +536,9 @@ func accessAuthMiddleware(manager *sdkaccess.Manager, realtimeError bool) gin.Ha
 
 		result, err := manager.Authenticate(c.Request.Context(), c.Request)
 		if err == nil {
+			if (result == nil || result.Principal == "") && refuseAccountSelector(c, realtimeError) {
+				return
+			}
 			if result != nil {
 				c.Set("userApiKey", result.Principal)
 				c.Set("accessProvider", result.Provider)
@@ -574,6 +601,9 @@ func realtimeAuthMiddleware(manager *sdkaccess.Manager, handler *codexlive.Handl
 				"param":   nil,
 				"code":    "invalid_realtime_client_secret",
 			}})
+			return
+		}
+		if refuseAccountSelector(c, true) {
 			return
 		}
 		principal := authorization.IssuerPrincipal

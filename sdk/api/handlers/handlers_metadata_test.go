@@ -438,3 +438,25 @@ func TestHomeUpdatedAPIKeyOverridesParentWithAPIKeyAfterCapture(t *testing.T) {
 		t.Fatalf("coreusage.APIKeyFromContext = %q, want %q", got, "home-dispatched-key-b")
 	}
 }
+
+func TestRequestExecutionMetadataCarriesRequestedAccount(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	build := func(account string) map[string]any {
+		ginCtx, _ := gin.CreateTestContext(httptest.NewRecorder())
+		ginCtx.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+		if account != "" {
+			ginCtx.Request.Header.Set(RequestedAccountHeader, account)
+		}
+		return requestExecutionMetadata(context.WithValue(context.Background(), "gin", ginCtx))
+	}
+	if _, ok := build("")[coreexecutor.RequestedAccountMetadataKey]; ok {
+		t.Fatal("no header must leave the metadata untouched")
+	}
+	meta := build("  mid@example.com ")
+	if got := meta[coreexecutor.RequestedAccountMetadataKey]; got != "mid@example.com" {
+		t.Fatalf("requested account = %v, want trimmed header value", got)
+	}
+	if _, ok := meta[coreexecutor.PinnedAuthMetadataKey]; ok {
+		t.Fatal("the handler must not pin an auth; the auth manager resolves the name")
+	}
+}
