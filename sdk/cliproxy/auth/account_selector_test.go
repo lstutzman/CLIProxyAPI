@@ -322,3 +322,18 @@ func TestAccountSelectorAppliesToStreamingRequests(t *testing.T) {
 		t.Fatalf("unknown account on a streaming request: %v", err)
 	}
 }
+
+func TestAccountSelectorFailsClosedOnUnresolvedSelectionPaths(t *testing.T) {
+	f := newAccountSelectorFixture(t)
+	opts := cliproxyexecutor.Options{Metadata: map[string]any{cliproxyexecutor.RequestedAccountMetadataKey: "mid@example.com"}}
+	if _, err := f.manager.SelectAuth(context.Background(), "claude", accountSelectorModel, opts); accountSelectorError(t, err).Code != ErrorCodeAccountUnsupported {
+		t.Fatalf("SelectAuth with an unresolved account must fail closed, got %v", err)
+	}
+	if _, err := f.manager.SelectAuthByKind(context.Background(), "claude", accountSelectorModel, "oauth", opts); accountSelectorError(t, err).Code != ErrorCodeAccountUnsupported {
+		t.Fatalf("SelectAuthByKind with an unresolved account must fail closed, got %v", err)
+	}
+	// Without a named account the same entry points are unchanged.
+	if picked, err := f.manager.SelectAuth(context.Background(), "claude", accountSelectorModel, cliproxyexecutor.Options{}); err != nil || picked == nil {
+		t.Fatalf("SelectAuth without a named account: %v %v", picked, err)
+	}
+}

@@ -2421,6 +2421,9 @@ func requestAwareCredSelectionRequired(ctx context.Context, auth *Auth, clientHe
 }
 
 func (m *Manager) pickNextLegacy(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, tried map[string]struct{}) (*Auth, ProviderExecutor, error) {
+	if errAccount := unresolvedAccountError(opts); errAccount != nil {
+		return nil, nil, errAccount
+	}
 	if m.HomeEnabled() {
 		clearSchedulerSelectionID(opts.Metadata)
 		auth, exec, _, err := m.pickNextViaHome(ctx, model, opts, tried)
@@ -2786,6 +2789,9 @@ func (m *Manager) SelectHomeAuthByKind(ctx context.Context, provider string, mod
 }
 
 func (m *Manager) pickNext(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, tried map[string]struct{}) (*Auth, ProviderExecutor, error) {
+	if errAccount := unresolvedAccountError(opts); errAccount != nil {
+		return nil, nil, errAccount
+	}
 	opts.EnsureMetadata()
 	clearSchedulerSelectionID(opts.Metadata)
 	if m.HomeEnabled() {
@@ -2914,6 +2920,9 @@ func (m *Manager) HasAlternativeTargetForModel(ctx context.Context, providers []
 }
 
 func (m *Manager) pickNextMixedLegacy(ctx context.Context, providers []string, model string, opts cliproxyexecutor.Options, tried map[string]struct{}) (*Auth, ProviderExecutor, string, error) {
+	if errAccount := unresolvedAccountError(opts); errAccount != nil {
+		return nil, nil, "", errAccount
+	}
 	if m.HomeEnabled() {
 		clearSchedulerSelectionID(opts.Metadata)
 		return m.pickNextViaHome(ctx, model, opts, tried)
@@ -3137,6 +3146,9 @@ func (m *Manager) pickNextMixedLegacy(ctx context.Context, providers []string, m
 }
 
 func (m *Manager) pickNextMixed(ctx context.Context, providers []string, model string, opts cliproxyexecutor.Options, tried map[string]struct{}) (*Auth, ProviderExecutor, string, error) {
+	if errAccount := unresolvedAccountError(opts); errAccount != nil {
+		return nil, nil, "", errAccount
+	}
 	opts.EnsureMetadata()
 	clearSchedulerSelectionID(opts.Metadata)
 	if m.HomeEnabled() {
