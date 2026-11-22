@@ -2421,6 +2421,9 @@ func requestAwareCredSelectionRequired(ctx context.Context, auth *Auth, clientHe
 }
 
 func (m *Manager) pickNextLegacy(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, tried map[string]struct{}) (*Auth, ProviderExecutor, error) {
+	if errAccount := unresolvedAccountError(opts); errAccount != nil {
+		return nil, nil, errAccount
+	}
 	if m.HomeEnabled() {
 		clearSchedulerSelectionID(opts.Metadata)
 		auth, exec, _, err := m.pickNextViaHome(ctx, model, opts, tried)
@@ -2525,7 +2528,17 @@ func (m *Manager) pickNextLegacy(ctx context.Context, provider, model string, op
 	transientAuthIDs := m.transientlyUnavailableSessionAffinityAuthIDs(ctx, selector, affinityCandidates, model, now, opts.Headers)
 	m.mu.RUnlock()
 
-	selected, handled, excluded, errPick := m.pickViaPluginScheduler(ctx, pluginScheduler, provider, []string{provider}, model, opts, tried, available)
+	var selected *Auth
+	var handled bool
+	var errPick error
+	var excluded map[string]struct{}
+	if explicitAccountFromMetadata(opts.Metadata) {
+		// A client-named account bypasses the plugin scheduler and the selector, so routing
+		// strategy, quota reserve and session affinity can neither veto nor rebind it.
+		selected, handled = firstAuth(selectorAuths), true
+	} else {
+		selected, handled, excluded, errPick = m.pickViaPluginScheduler(ctx, pluginScheduler, provider, []string{provider}, model, opts, tried, available)
+	}
 	effectiveTried := mergeTriedAuthIDs(tried, excluded)
 	if errPick != nil {
 		m.warnLogAuthUnavailable(ctx, []string{provider}, model, opts, effectiveTried, errPick)
@@ -2776,6 +2789,9 @@ func (m *Manager) SelectHomeAuthByKind(ctx context.Context, provider string, mod
 }
 
 func (m *Manager) pickNext(ctx context.Context, provider, model string, opts cliproxyexecutor.Options, tried map[string]struct{}) (*Auth, ProviderExecutor, error) {
+	if errAccount := unresolvedAccountError(opts); errAccount != nil {
+		return nil, nil, errAccount
+	}
 	opts.EnsureMetadata()
 	clearSchedulerSelectionID(opts.Metadata)
 	if m.HomeEnabled() {
@@ -2904,6 +2920,9 @@ func (m *Manager) HasAlternativeTargetForModel(ctx context.Context, providers []
 }
 
 func (m *Manager) pickNextMixedLegacy(ctx context.Context, providers []string, model string, opts cliproxyexecutor.Options, tried map[string]struct{}) (*Auth, ProviderExecutor, string, error) {
+	if errAccount := unresolvedAccountError(opts); errAccount != nil {
+		return nil, nil, "", errAccount
+	}
 	if m.HomeEnabled() {
 		clearSchedulerSelectionID(opts.Metadata)
 		return m.pickNextViaHome(ctx, model, opts, tried)
@@ -3023,7 +3042,16 @@ func (m *Manager) pickNextMixedLegacy(ctx context.Context, providers []string, m
 	transientAuthIDs := m.transientlyUnavailableSessionAffinityAuthIDs(ctx, selector, affinityCandidates, model, now, opts.Headers)
 	m.mu.RUnlock()
 
-	selected, handled, excluded, errPick := m.pickViaPluginScheduler(ctx, pluginScheduler, "mixed", providers, model, opts, tried, available)
+	var selected *Auth
+	var handled bool
+	var errPick error
+	var excluded map[string]struct{}
+	if explicitAccountFromMetadata(opts.Metadata) {
+		// See pickNextLegacy: a client-named account bypasses scheduler, selector and affinity.
+		selected, handled = firstAuth(selectorAuths), true
+	} else {
+		selected, handled, excluded, errPick = m.pickViaPluginScheduler(ctx, pluginScheduler, "mixed", providers, model, opts, tried, available)
+	}
 	effectiveTried := mergeTriedAuthIDs(tried, excluded)
 	if errPick != nil {
 		m.warnLogAuthUnavailable(ctx, providers, model, opts, effectiveTried, errPick)
@@ -3118,6 +3146,9 @@ func (m *Manager) pickNextMixedLegacy(ctx context.Context, providers []string, m
 }
 
 func (m *Manager) pickNextMixed(ctx context.Context, providers []string, model string, opts cliproxyexecutor.Options, tried map[string]struct{}) (*Auth, ProviderExecutor, string, error) {
+	if errAccount := unresolvedAccountError(opts); errAccount != nil {
+		return nil, nil, "", errAccount
+	}
 	opts.EnsureMetadata()
 	clearSchedulerSelectionID(opts.Metadata)
 	if m.HomeEnabled() {

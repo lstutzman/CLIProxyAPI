@@ -2,6 +2,8 @@ package cliproxy
 
 import (
 	"context"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -61,6 +63,10 @@ type routingRuntimeState struct {
 	sessionAffinityTTL       time.Duration
 	sessionAffinitySubagents bool
 	sessionAffinityRebindOn  string
+	quotaThreshold           float64
+	// quotaThresholds is the canonical "email=threshold" list (sorted, comma-separated) so the
+	// state stays comparable; newRoutingSelector expands it.
+	quotaThresholds string
 }
 
 func normalizedRoutingRuntimeState(cfg *config.Config) routingRuntimeState {
@@ -79,6 +85,24 @@ func normalizedRoutingRuntimeState(cfg *config.Config) routingRuntimeState {
 		state.strategy = "weighted-round-robin"
 	case "fill-first", "fillfirst", "ff":
 		state.strategy = "fill-first"
+	case "quota-aware", "quotaaware", "quota":
+		state.strategy = "quota-aware"
+	}
+	if state.strategy == "quota-aware" {
+		state.quotaThreshold = coreauth.DefaultQuotaThreshold
+		if threshold := cfg.Routing.QuotaThreshold; threshold > 0 && threshold <= 100 {
+			state.quotaThreshold = threshold
+		}
+		entries := make([]string, 0, len(cfg.Routing.QuotaThresholds))
+		for account, threshold := range cfg.Routing.QuotaThresholds {
+			key := strings.ToLower(strings.TrimSpace(account))
+			if key == "" || strings.ContainsAny(key, ",=") || threshold <= 0 || threshold > 100 {
+				continue
+			}
+			entries = append(entries, key+"="+strconv.FormatFloat(threshold, 'f', -1, 64))
+		}
+		sort.Strings(entries)
+		state.quotaThresholds = strings.Join(entries, ",")
 	}
 	state.sessionAffinity = cfg.Routing.SessionAffinity
 	if ttl := strings.TrimSpace(cfg.Routing.SessionAffinityTTL); ttl != "" {
@@ -118,6 +142,8 @@ func newRoutingSelectorWithExisting(state routingRuntimeState, existing coreauth
 		}
 	case "fill-first":
 		selector = &coreauth.FillFirstSelector{}
+	case "quota-aware":
+		selector = &coreauth.QuotaAwareSelector{Threshold: state.quotaThreshold, AccountThresholds: parseQuotaThresholds(state.quotaThresholds)}
 	default:
 		selector = &coreauth.RoundRobinSelector{}
 	}
@@ -372,4 +398,23 @@ func forceHomeRuntimeConfig(cfg *config.Config) {
 	cfg.RemoteManagement.DisableControlPanel = true
 	cfg.Plugins.StoreAuth = nil
 	cfg.KVStore.Disabled = true
+}
+
+// parseQuotaThresholds expands the canonical "email=threshold" list built by
+// normalizedRoutingRuntimeState.
+func parseQuotaThresholds(list string) map[string]float64 {
+	if list == "" {
+		return nil
+	}
+	out := make(map[string]float64)
+	for _, entry := range strings.Split(list, ",") {
+		key, value, ok := strings.Cut(entry, "=")
+		if !ok {
+			continue
+		}
+		if threshold, err := strconv.ParseFloat(value, 64); err == nil {
+			out[key] = threshold
+		}
+	}
+	return out
 }

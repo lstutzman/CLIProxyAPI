@@ -576,7 +576,7 @@ type QuotaExceeded struct {
 // RoutingConfig configures how credentials are selected for requests.
 type RoutingConfig struct {
 	// Strategy selects the credential selection strategy.
-	// Supported values: "round-robin" (default), "weighted-round-robin", "fill-first".
+	// Supported values: "round-robin" (default), "weighted-round-robin", "fill-first", "quota-aware".
 	Strategy string `yaml:"strategy,omitempty" json:"strategy,omitempty"`
 
 	// SessionAffinity enables universal session-sticky routing for all clients.
@@ -612,6 +612,16 @@ type RoutingConfig struct {
 	//     keep the binding and return the error (or retry the same credential) instead.
 	// Ignored when SessionAffinity is false.
 	SessionAffinityRebindOn string `yaml:"session-affinity-rebind-on,omitempty" json:"session-affinity-rebind-on,omitempty"`
+
+	// QuotaThreshold is the used-quota percentage (0-100] at which the "quota-aware" strategy
+	// moves work off a credential, including credentials already bound by session affinity.
+	// Default: 90.
+	QuotaThreshold float64 `yaml:"quota-threshold,omitempty" json:"quota-threshold,omitempty"`
+
+	// QuotaThresholds overrides QuotaThreshold per account, keyed by the OAuth account email
+	// (case-insensitive). An account listed here is a reserve: the "quota-aware" strategy never
+	// sends it work at or above its own threshold, not even when every other account is spent.
+	QuotaThresholds map[string]float64 `yaml:"quota-thresholds,omitempty" json:"quota-thresholds,omitempty"`
 }
 
 // OAuthModelAlias defines a model ID alias for a specific channel.
